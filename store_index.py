@@ -1,46 +1,29 @@
-from dotenv import load_dotenv
 import os
-from src.helper import load_pdf_file, filter_to_minimal_docs, text_split, download_hugging_face_embeddings
-from pinecone import Pinecone
-from pinecone import ServerlessSpec 
+import pinecone
 from langchain_pinecone import PineconeVectorStore
-
-load_dotenv()
-
-
-PINECONE_API_KEY=os.environ.get('PINECONE_API_KEY')
-OPENAI_API_KEY=os.environ.get('OPENAI_API_KEY')
-
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_groq import ChatGroq
+from pinecone import Pinecone
+# Import your API keys
+import os
+from config import PINECONE_API_KEY, GROQ_API_KEY
+# Set them as environment variables
 os.environ["PINECONE_API_KEY"] = PINECONE_API_KEY
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 
+# Load Existing index
 
-extracted_data=load_pdf_file(data='data/')
-filter_data = filter_to_minimal_docs(extracted_data)
-text_chunks=text_split(filter_data)
+# Initialize Pinecone client
+pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
 
-embeddings = download_hugging_face_embeddings()
+# Define the index name
+INDEX_NAME = "medical-chatbot" # Ensure INDEX_NAME is defined
 
-pinecone_api_key = PINECONE_API_KEY
-pc = Pinecone(api_key=pinecone_api_key)
+# Connect to existing index
+index = pc.Index(INDEX_NAME)
 
+# Embeddings
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-
-index_name = "medical-chatbot"  # change if desired
-
-if not pc.has_index(index_name):
-    pc.create_index(
-        name=index_name,
-        dimension=384,
-        metric="cosine",
-        spec=ServerlessSpec(cloud="aws", region="us-east-1"),
-    )
-
-index = pc.Index(index_name)
-
-
-docsearch = PineconeVectorStore.from_documents(
-    documents=text_chunks,
-    index_name=index_name,
-    embedding=embeddings, 
-)
+# Create vectorstore using the initialized Pinecone index
+vectorstore = PineconeVectorStore(index=index, embedding=embeddings, text_key="text")
